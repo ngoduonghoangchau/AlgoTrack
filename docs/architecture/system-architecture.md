@@ -190,7 +190,7 @@ sequenceDiagram
 5. The email-verification requirement is enforced on the server for protected application operations. The precise policy for sign-in, verification prompts, and allowed public endpoints must be documented in API contracts.
 6. Authorization is checked per use case/resource. A valid token does not grant access to another user's private roadmap or review schedule.
 7. Admin provisioning is server-configured. Do not allow the frontend or ordinary users to grant themselves admin status.
-8. Return consistent `401 Unauthorized` responses for missing/invalid authentication and `403 Forbidden` responses when the caller is authenticated but lacks permission, subject to the API's documented error contract.
+8. Return consistent `401 Unauthorized` responses for missing/invalid authentication. For private roadmaps, return `404 Not Found` when the resource is missing or not owned by the caller; use `403 Forbidden` for other authenticated permission failures where revealing resource existence is not a concern.
 
 Official reference: [Verify Firebase ID tokens](https://firebase.google.com/docs/auth/admin/verify-id-tokens).
 
@@ -201,9 +201,14 @@ Official reference: [Verify Firebase ID tokens](https://firebase.google.com/docs
 - **Roadmap-topic relationship:** progress belongs to the user's roadmap-topic link, not to the shared topic globally. Removing a topic from a roadmap archives the link, preserving history.
 - **Problem catalog:** problem management is restricted to the seed/admin workflow. Ordinary learners cannot create or edit catalog problems.
 - **Problem deletion:** use soft deletion so historical practice and review records can remain consistent. Restoration reverses the deleted state according to the approved rules.
-- **Practice status:** the current product decision uses `Solved` as the practice status. The API should validate status transitions and required fields.
-- **Review schedules:** schedules are scoped to a user-problem pair. A uniqueness rule should prevent duplicate active schedules for the same pair.
-- **Review policy:** the policy is fixed for the MVP. The exact intervals must be documented in the business rules before implementing the scheduler.
+- **Practice state:** the current product decision uses `Solved` as the only status. Store one current `PracticeRecord` per `(UserId, ProblemId)`; do not persist a full attempt history in the MVP. Undoing `Solved` is not supported.
+- **Review schedules:** schedules are scoped to a user-problem pair, unique on `(UserId, ProblemId)`, and created only when the problem becomes `Solved`. Marking the same problem solved again must not create a duplicate schedule or reset its current review timing.
+- **Review policy:** use fixed intervals of 1, 3, 7, 14, 30, and 60 days; after the sixth interval, continue every 60 days. Early completion is allowed, and the next interval is calculated from the actual completion timestamp. Overdue reviews are not penalized.
+- **Review idempotency:** a review occurrence may advance the schedule only once. Implement a concurrency-safe mechanism; current-state-only practice storage does not imply that duplicate review completion requests are safe by default.
+- **Archived shared topics:** archiving a topic preserves existing roadmap-topic links and progress. Existing links display an archived indicator, but new links to archived topics are rejected.
+- **Seed/admin ownership:** seed inserts missing catalog rows only and never overwrites admin-managed fields or restores soft-deleted problems. Seed-managed problems use a stable unique `SeedKey`; admin-created problems may have no `SeedKey`.
+- **Account deletion:** self-service deletion is out of MVP scope. Operational deletion requests require a tracked process covering Firebase identity and application data separately.
+- **Public IDs:** SQL Server `BIGINT` maps to C# `long`; public JSON contracts represent IDs as decimal strings to avoid JavaScript integer precision loss.
 
 These rules must be reflected in database constraints where practical and enforced in application logic where database constraints alone are insufficient.
 
@@ -222,7 +227,7 @@ These rules must be reflected in database constraints where practical and enforc
 - Check resource ownership in the Application/use-case path, not only by hiding buttons in the UI.
 - Protect admin operations with server-side configuration/policies.
 - Apply the verified-email policy on the server.
-- Avoid returning whether a private resource exists to unauthorized callers if that would disclose sensitive information; document the chosen `403` versus `404` behavior.
+- For private roadmaps, return `404 Not Found` for both missing resources and resources not owned by the caller, preventing resource-existence disclosure.
 
 ### CORS
 
@@ -280,8 +285,7 @@ Tests must include negative security cases, not only successful requests: missin
 - Exact .NET target framework and package versions.
 - Final deployment providers and environment strategy.
 - Exact allowed CORS origins for local, staging, and production.
-- Exact fixed review intervals and behavior when a due review is skipped.
-- Exact response policy for inaccessible private resources (`403` or `404`).
+- Problem-topic association changes after practice exists and whether they require archival/audit behavior.
 - Whether integration tests will use a dedicated SQL Server instance or a container.
 - How server-configured admin identities are represented and rotated without committing secrets.
 

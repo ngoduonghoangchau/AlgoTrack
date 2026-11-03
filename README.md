@@ -9,7 +9,7 @@
 - Build a portfolio-quality full-stack application using a realistic engineering workflow.
 - Practice DSA through a structured, personal learning roadmap.
 - Track learning progress at roadmap-topic level.
-- Record successful problem-solving attempts and review them on a fixed schedule.
+- Store each user’s current `Solved` state per problem and review it on a fixed schedule; the MVP does not keep a full attempt history.
 - Demonstrate clean architecture, API security, testing, CI, and professional Git practices.
 
 ## Planned technology stack
@@ -34,9 +34,9 @@ The exact .NET target framework and supporting package versions will be selected
 - **Private roadmaps:** create and manage personal roadmaps.
 - **Topic progress:** track `NotStarted`, `InProgress`, and `Completed` for each topic within a roadmap.
 - **Prerequisites:** define topic dependencies within a roadmap and reject self-dependencies or cycles.
-- **Problem catalog:** browse problems categorized by difficulty and tags.
-- **Practice history:** record successful solving attempts, including optional duration and notes.
-- **Review queue:** maintain one review schedule per user and problem, using a fixed review interval.
+- **Problem catalog:** browse problems categorized by difficulty and associated shared topics.
+- **Practice state:** store the current `Solved` status once per user-problem pair; undoing `Solved` and full attempt history are out of scope for the MVP.
+- **Review queue:** create at most one review schedule per user-problem pair, and only when the problem is marked `Solved`; fixed intervals are 1, 3, 7, 14, 30, and 60 days, then every 60 days. Early completion is allowed; the next date is calculated from actual completion time.
 - **Dashboard:** summarize roadmap progress and upcoming or overdue reviews.
 - **Admin problem management:** seed/manage shared problems, soft-delete them, and restore them through server-authorized admin access.
 
@@ -96,15 +96,14 @@ The solution and tests have not necessarily been created yet. This section descr
 
 The planned SQL Server model includes:
 
-- `ApplicationUser`
+- `AppUser`
 - `Roadmap`
 - `Topic`
 - `RoadmapTopic`
 - `TopicPrerequisite`
 - `Problem`
-- `Tag`
-- `ProblemTag`
-- `PracticeAttempt`
+- `ProblemTopic`
+- `PracticeRecord`
 - `ReviewSchedule`
 
 Key decisions:
@@ -112,12 +111,12 @@ Key decisions:
 - Topics are shared across users; learning progress belongs to `RoadmapTopic`.
 - A roadmap has one owner and is private in the MVP.
 - Prerequisites connect topics within the same roadmap and must not form cycles.
-- Practice attempts are historical records and can contain multiple attempts for the same user and problem.
-- Review schedules are unique by `(UserId, ProblemId)`, shared across that user's roadmaps.
-- Topics are archived rather than physically deleted.
+- `PracticeRecord` stores only the current state per `(UserId, ProblemId)`; no separate attempt history is kept in the MVP.
+- Review schedules are unique by `(UserId, ProblemId)`, shared across that user's roadmaps, and are created only when the problem becomes `Solved`.
+- Topics are archived rather than physically deleted; existing roadmap-topic links and progress remain, but archived topics cannot be newly linked.
 - Problems use soft deletion and can be restored by an authorized administrator.
 
-The physical schema and migrations will be reviewed before implementation.
+Self-service account deletion is outside MVP scope; verified requests require an operational process that tracks Firebase and application-data deletion separately. SQL Server `BIGINT` IDs are represented as decimal strings in public JSON contracts. The physical schema and API contracts are documentation artifacts; remaining open decisions must be reviewed before implementation. No migrations have been created yet.
 
 ## Repository layout
 
@@ -181,7 +180,7 @@ See `CONTRIBUTING.md` for the repository's detailed contribution rules once that
 ## Roadmap
 
 - [ ] Finalize project charter, MVP requirements, and decision log
-- [ ] Finalize physical database design and API contracts
+- [x] Document physical database design and API contracts (remaining open decisions are tracked in those documents)
 - [ ] Establish repository standards and branch protection
 - [ ] Create the Clean Architecture .NET solution and test projects
 - [ ] Implement Firebase token verification and `GET /api/v1/me`

@@ -15,13 +15,13 @@
 
 - Use REST-style resource paths.
 - Use camelCase for JSON properties.
-- Use UUID strings for resource identifiers if consistent with the approved physical schema.
+- SQL Server `BIGINT` identifiers map to C# `long` and are represented as decimal strings in public JSON request/response bodies. Route IDs are validated and parsed to `long`; frontend code must not convert IDs to JavaScript `Number`.
 - Represent timestamps as ISO 8601 UTC strings.
 - Use UTF-8 JSON.
 - Never accept an owner user ID from the client as proof of ownership.
 - Never return internal exception messages, SQL details, stack traces, or secrets.
 
-### 1.2 Authentication
+### 1.2 JSON identifiers\n\n- All SQL Server `BIGINT` identifiers in public JSON request/response bodies are decimal strings, for example `"problemId": "12345"`.\n- Route parameters are decimal strings and must be validated and parsed to C# `long`.\n- The frontend must not convert IDs to JavaScript `Number`.\n\n### 1.3 Authentication
 
 Protected requests must include:
 
@@ -38,7 +38,7 @@ The API must:
 
 A Firebase ID token is not the same as a refresh token. Never accept a client-supplied UID or email as an authentication credential.
 
-### 1.3 Standard error response
+### 1.4 Standard error response
 
 Use the Problem Details format for errors.
 
@@ -61,7 +61,7 @@ The `errors` extension is included when field-level validation details are avail
 
 Do not expose sensitive implementation details in `detail`.
 
-### 1.4 HTTP status conventions
+### 1.5 HTTP status conventions
 
 | Status | Meaning |
 | --- | --- |
@@ -69,13 +69,13 @@ Do not expose sensitive implementation details in `detail`.
 | 201 | Resource created |
 | 204 | Successful operation with no response body |
 | 400 | Invalid request or validation failure |
-| 401 | Missing or invalid authentication, or unverified email under the chosen policy |
-| 403 | Authenticated caller lacks a required permission |
+| 401 | Missing or invalid authentication |
+| 403 | Authenticated caller lacks a required permission, including an unverified-email policy failure |
 | 404 | Resource does not exist or private resource is not owned by caller |
 | 409 | State conflict or duplicate resource |
 | 500 | Unexpected server failure |
 
-For a valid token with an unverified email, this draft proposes `403 Forbidden` with a stable error code. This choice remains subject to review.
+For a valid token with an unverified email, return `403 Forbidden` with a stable error code such as `email_not_verified`.
 
 ## 2. Identity and Profile
 
@@ -101,7 +101,7 @@ Rules:
 - Handle concurrent first requests without creating duplicate profiles.
 - Do not return Firebase credentials or tokens in the profile response.
 
-Open question:
+Open decision:
 - Which profile fields can users edit, and which fields are synchronized from Firebase?
 
 ## 3. Roadmaps
@@ -186,7 +186,6 @@ Restores an archived roadmap.
 Response: `204 No Content`
 
 Open questions:
-- Should archived roadmaps be listed through `includeArchived=true` or a separate endpoint?
 - Should repeated archive/restore requests return success or `409 Conflict`?
 
 ## 4. Roadmap Topics
@@ -213,6 +212,8 @@ Allowed progress values:
 - `NotStarted`
 - `InProgress`
 - `Completed`
+
+These values are approved for the MVP.
 
 ### POST /api/v1/roadmaps/{roadmapId}/topics
 
@@ -277,7 +278,7 @@ Response: `204 No Content`
 
 Open questions:
 - Can progress be changed while the link is archived?
-- What happens when the shared topic itself is archived?
+- If the shared topic is archived, preserve this existing link and its progress, expose the topic as archived, and reject new links to that topic.
 - How should restoration handle an existing active link for the same topic?
 
 ## 5. Shared Topics
@@ -437,6 +438,7 @@ Response: `200 OK`
 
 Rules:
 - `Solved` is the only supported practice status in the MVP.
+- The database stores only the current state per user-problem pair; it does not keep a full attempt history.
 - Repeated requests must be idempotent.
 - Create at most one practice record per user-problem pair.
 - Create the initial review schedule only when the problem becomes solved.
@@ -476,15 +478,14 @@ Proposed response:
 Rules:
 - A schedule must already exist for the current user-problem pair.
 - Review completion must not create a second schedule.
-- The next review date must follow the approved fixed-interval policy.
+- The next review date follows the fixed interval sequence `1, 3, 7, 14, 30, 60` days, then every 60 days thereafter.
 - The server, not the client, calculates the next review date.
 - Validate repeated or concurrent completion requests.
 
 Open questions:
-- What are the exact review intervals?
-- Can a review be completed before its due date?
-- What happens when a review is completed multiple times?
-- How should overdue reviews be handled?
+- Early completion is allowed; calculate the next date from the actual completion timestamp.
+- Overdue reviews are not penalized; calculate the next date from the actual completion timestamp.
+- A repeated request for the same review occurrence must not advance the schedule twice. The implementation must use a concurrency-safe idempotency strategy.
 
 ## 10. Authorization Matrix
 
@@ -502,20 +503,20 @@ Every ownership check must be performed on the server.
 
 ## 11. Open Decisions Before Approval
 
-1. Archived roadmap listing and repeated archive/restore behavior.
-2. Archived shared-topic behavior and roadmap-topic restoration conflicts.
+1. Repeated archive/restore behavior and archived-roadmap listing semantics.
+2. Roadmap-topic restoration conflicts if the same topic already has an active link.
 3. Exact reorder semantics.
 4. Problem filters, sorting, difficulty enum, and pagination limits.
 5. Problem create/update DTOs and admin audit requirements.
-6. Seed reconciliation when admins modify seeded problems.
-7. Account deletion and dependent-data lifecycle.
+6. Exact seed conflict reporting and operational recovery behavior.
+7. Operational account-deletion runbook and data-retention obligations; self-service deletion is out of MVP scope.
 8. Editable profile fields and Firebase profile synchronization.
 9. Exact error contract for unverified email.
 10. Admin identity configuration and change auditing.
 11. Topic/prerequisite admin operations.
-12. Fixed review intervals, early completion, overdue behavior, and repeated completion.
+12. Review-completion idempotency mechanism and concurrency behavior.
 13. Handling solved records when a problem is soft-deleted.
-14. Exact ID types and field constraints, verified against the approved physical schema.
+14. Final field constraints against the physical schema.
 
 ## 12. Definition of Done
 
