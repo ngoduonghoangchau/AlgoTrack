@@ -71,7 +71,7 @@ Progress belongs to a topic's placement in a specific roadmap. Removing a topic 
 | POST | `/api/v1/roadmaps/{roadmapId}/topics/{roadmapTopicId}/archive` | Archive the roadmap-topic link | Roadmap owner |
 | POST | `/api/v1/roadmaps/{roadmapId}/topics/{roadmapTopicId}/restore` | Restore an archived link | Roadmap owner |
 
-**Open detail:** Decide whether reordering uses `PATCH` with a list of IDs and sort orders or a dedicated reorder command DTO. Also decide how archived shared topics affect existing roadmap links.
+**Open detail:** Decide whether reordering uses `PATCH` with a list of IDs and sort orders or a dedicated reorder command DTO. Approved: archiving a shared topic preserves existing roadmap links and progress, displays an archived indicator, and blocks new links to that topic.
 
 ## 5. Shared topics
 
@@ -126,7 +126,7 @@ Each user-problem pair has at most one review schedule. A schedule is created on
 | GET | `/api/v1/me/reviews` | List the current user's upcoming/due review schedules | Current user |
 | POST | `/api/v1/me/reviews/{problemId}/complete` | Record completion of the due review and update the existing schedule using the fixed interval policy | Current user |
 
-The fixed review intervals and overdue behavior must be decided before the completion endpoint's behavior can be finalized.
+Approved review policy: intervals are 1, 3, 7, 14, 30, and 60 days, then every 60 days. Early completion is allowed; calculate the next date from actual completion time. Overdue reviews are not penalized. Completion must be idempotent for each review occurrence.
 
 ## 9. Cross-cutting behavior to specify next
 
@@ -165,11 +165,11 @@ Never leak whether another user's private roadmap exists through error details.
 1. **Roadmap list:** Should archived roadmaps be available through a query parameter or a separate endpoint?
 2. **Archived shared topic:** Can an existing roadmap link still have progress edited?
 3. **Reorder contract:** Full ordered ID list or per-topic sort-order updates?
-4. **Review policy:** Exact fixed intervals and behavior for overdue reviews.
+4. **Review completion:** Confirm the concurrency-safe idempotency mechanism for repeated completion requests.
 5. **Problem browsing:** Exact filter fields, sort fields, and pagination defaults.
 6. **Admin problem contract:** Required create/update fields and audit metadata for admin changes.
 7. **Seed/admin conflict:** How should seed reconciliation behave if an admin has edited or soft-deleted a seeded problem?
-8. **Account lifecycle:** Is account deletion in MVP scope, and what happens to roadmaps, practice records, and review schedules?
+8. **Account lifecycle:** Self-service account deletion is out of MVP scope; define the operational deletion and retention runbook before production.
 9. **Admin authorization source:** Which server-side configuration identifies admins (for example, Firebase UID allowlist or trusted custom claims), and how are changes audited?
 10. **Admin topic operations:** Does the separate admin API also need endpoints to create/update/archive shared topics and manage prerequisites, or will those remain seed-only?
 11. **Profile field policy:** Which profile fields may be updated by the user, and which are snapshots synchronized from Firebase?
@@ -185,3 +185,9 @@ Never leak whether another user's private roadmap exists through error details.
 - [ ] Archive, restore, practice, and review operations match the database decisions.
 - [ ] Unresolved decisions are listed instead of silently guessed.
 - [ ] No controllers, DTO classes, or runtime endpoints are implemented in this documentation-only step.
+
+
+## Confirmed API representation rules
+
+- SQL Server `BIGINT` IDs are represented as decimal strings in JSON; frontend code must not convert them to JavaScript `Number`.
+- Seed inserts missing catalog rows only, never overwrites admin-managed fields, and never restores soft-deleted problems.

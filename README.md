@@ -36,7 +36,7 @@ The exact .NET target framework and supporting package versions will be selected
 - **Prerequisites:** define topic dependencies within a roadmap and reject self-dependencies or cycles.
 - **Problem catalog:** browse problems categorized by difficulty and associated shared topics.
 - **Practice state:** store the current `Solved` status once per user-problem pair; undoing `Solved` and full attempt history are out of scope for the MVP.
-- **Review queue:** create at most one review schedule per user-problem pair, and only when the problem is marked `Solved`; exact fixed intervals remain to be decided.
+- **Review queue:** create at most one review schedule per user-problem pair, and only when the problem is marked `Solved`; fixed intervals are 1, 3, 7, 14, 30, and 60 days, then every 60 days. Early completion is allowed; the next date is calculated from actual completion time.
 - **Dashboard:** summarize roadmap progress and upcoming or overdue reviews.
 - **Admin problem management:** seed/manage shared problems, soft-delete them, and restore them through server-authorized admin access.
 
@@ -113,10 +113,10 @@ Key decisions:
 - Prerequisites connect topics within the same roadmap and must not form cycles.
 - `PracticeRecord` stores only the current state per `(UserId, ProblemId)`; no separate attempt history is kept in the MVP.
 - Review schedules are unique by `(UserId, ProblemId)`, shared across that user's roadmaps, and are created only when the problem becomes `Solved`.
-- Topics are archived rather than physically deleted.
+- Topics are archived rather than physically deleted; existing roadmap-topic links and progress remain, but archived topics cannot be newly linked.
 - Problems use soft deletion and can be restored by an authorized administrator.
 
-The physical schema and API contracts are documentation artifacts; field-level consistency and remaining open decisions must be reviewed before implementation. No migrations have been created yet.
+Self-service account deletion is outside MVP scope; verified requests require an operational process that tracks Firebase and application-data deletion separately. SQL Server `BIGINT` IDs are represented as decimal strings in public JSON contracts. The physical schema and API contracts are documentation artifacts; remaining open decisions must be reviewed before implementation. No migrations have been created yet.
 
 ## Repository layout
 

@@ -203,7 +203,12 @@ Official reference: [Verify Firebase ID tokens](https://firebase.google.com/docs
 - **Problem deletion:** use soft deletion so historical practice and review records can remain consistent. Restoration reverses the deleted state according to the approved rules.
 - **Practice state:** the current product decision uses `Solved` as the only status. Store one current `PracticeRecord` per `(UserId, ProblemId)`; do not persist a full attempt history in the MVP. Undoing `Solved` is not supported.
 - **Review schedules:** schedules are scoped to a user-problem pair, unique on `(UserId, ProblemId)`, and created only when the problem becomes `Solved`. Marking the same problem solved again must not create a duplicate schedule or reset its current review timing.
-- **Review policy:** the policy is fixed for the MVP. The exact intervals must be documented in the business rules before implementing the scheduler.
+- **Review policy:** use fixed intervals of 1, 3, 7, 14, 30, and 60 days; after the sixth interval, continue every 60 days. Early completion is allowed, and the next interval is calculated from the actual completion timestamp. Overdue reviews are not penalized.
+- **Review idempotency:** a review occurrence may advance the schedule only once. Implement a concurrency-safe mechanism; current-state-only practice storage does not imply that duplicate review completion requests are safe by default.
+- **Archived shared topics:** archiving a topic preserves existing roadmap-topic links and progress. Existing links display an archived indicator, but new links to archived topics are rejected.
+- **Seed/admin ownership:** seed inserts missing catalog rows only and never overwrites admin-managed fields or restores soft-deleted problems. Seed-managed problems use a stable unique `SeedKey`; admin-created problems may have no `SeedKey`.
+- **Account deletion:** self-service deletion is out of MVP scope. Operational deletion requests require a tracked process covering Firebase identity and application data separately.
+- **Public IDs:** SQL Server `BIGINT` maps to C# `long`; public JSON contracts represent IDs as decimal strings to avoid JavaScript integer precision loss.
 
 These rules must be reflected in database constraints where practical and enforced in application logic where database constraints alone are insufficient.
 
@@ -280,7 +285,7 @@ Tests must include negative security cases, not only successful requests: missin
 - Exact .NET target framework and package versions.
 - Final deployment providers and environment strategy.
 - Exact allowed CORS origins for local, staging, and production.
-- Exact fixed review intervals and behavior when a due review is skipped.
+- Problem-topic association changes after practice exists and whether they require archival/audit behavior.
 - Whether integration tests will use a dedicated SQL Server instance or a container.
 - How server-configured admin identities are represented and rotated without committing secrets.
 

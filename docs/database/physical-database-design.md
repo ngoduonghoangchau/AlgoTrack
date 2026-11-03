@@ -11,13 +11,13 @@
 - Topics are shared.
 - Problems are managed through seed/admin processes.
 - Practice status is `Solved`; store only the current state per user-problem pair, with no attempt-history table.
-- Review policy is simple and fixed.
+- Review policy uses fixed intervals of 1, 3, 7, 14, 30, and 60 days, then every 60 days thereafter; early completion is allowed and the next interval starts from actual completion time.
 - Roadmaps are private and user-owned.
 - Roadmap deletion is archive-only in the MVP; do not physically delete roadmaps.
 - Topic progress belongs to `RoadmapTopic`, with approved values `NotStarted`, `InProgress`, and `Completed`.
 - Review schedule scope is one user-problem pair; create the schedule only when the problem becomes `Solved`.
 - Removing a topic from a roadmap archives the link.
-- Topics are archived rather than deleted.
+- Topics are archived rather than deleted; archiving preserves existing roadmap-topic links and progress but blocks new links.
 - Problems are soft-deleted and can be restored.
 - Admin access is provisioned server-side.
 - Email verification is required for protected application operations.
@@ -86,6 +86,7 @@ erDiagram
     PROBLEM {
         bigint Id PK
         nvarchar Slug UK
+        nvarchar SeedKey UK "nullable for admin-created problems"
         nvarchar Title
         nvarchar Difficulty
         nvarchar ExternalUrl
@@ -131,7 +132,7 @@ Application profile linked to Firebase. `FirebaseUid` is unique and comes only f
 Private roadmap owned by one user. All reads and writes must be scoped to the authenticated owner. `RowVersion` is an optional SQL Server optimistic-concurrency token.
 
 ### `Topic`
-Shared topic catalog with a stable unique `Slug`. `ArchivedAt IS NULL` means active. Archiving should block new links while preserving historical relationships, subject to the final product rule.
+Shared topic catalog with a stable unique `Slug`. `ArchivedAt IS NULL` means active. Archiving preserves existing roadmap-topic links and their progress, but blocks new links to the archived topic. Existing links should expose the archived topic state to the client.
 
 ### `RoadmapTopic`
 Connects a private roadmap to a shared topic. Progress belongs here, not on `Topic`. Archive the relationship by setting `ArchivedAt`; do not delete the shared topic. Proposed unique constraint: `(RoadmapId, TopicId)` across active and archived rows. Re-adding should restore the existing row instead of inserting a duplicate. The approved progress values are `NotStarted`, `InProgress`, and `Completed`.
@@ -149,7 +150,7 @@ Many-to-many relationship between problems and topics, with composite PK `(Probl
 Proposed as the user's current state for a problem, unique on `(UserId, ProblemId)`. The MVP status is constrained to `Solved`, with `SolvedAt` recording when it was marked solved. The MVP stores only the current state per user-problem pair. Do not add a `PracticeAttempt` table for the MVP.
 
 ### `ReviewSchedule`
-One schedule per `(UserId, ProblemId)`, enforced by a unique constraint. `NextReviewAt` and `LastReviewedAt` use UTC-normalized `datetimeoffset`; `ReviewCount` must be non-negative. Fixed intervals must be defined in business rules before implementation.
+One schedule per `(UserId, ProblemId)`, enforced by a unique constraint. `NextReviewAt` and `LastReviewedAt` use UTC-normalized `datetimeoffset`; `ReviewCount` must be non-negative. Use intervals of 1, 3, 7, 14, 30, and 60 days; after the sixth interval, continue every 60 days. Early completion is allowed and the next date is calculated from the actual completion timestamp. Review completion must be idempotent/concurrency-safe for each occurrence.
 
 ## 4. Constraints and indexes
 
@@ -180,7 +181,7 @@ Review indexes against actual query patterns before implementation. Avoid indexe
 | Restore problem | Clear `Problem.DeletedAt`; retain practice/review records |
 | Delete prerequisite edge | Delete only the edge, never either topic |
 | Delete roadmap | Archive the roadmap; do not physically delete it in the MVP |
-| Delete user/account | Retention and account-deletion policy not yet decided |
+| Delete user/account | Self-service deletion is outside MVP; a documented operational process must track Firebase and application-data deletion separately |
 
 Use `Restrict`/`NoAction` for catalog relationships where accidental cascades could erase history. Use cascade deletion only for dependent records whose lifecycle is explicitly approved.
 
@@ -204,10 +205,8 @@ Use `Restrict`/`NoAction` for catalog relationships where accidental cascades co
 
 ## 8. Open questions to resolve before final approval
 
-1. **Archived topic behavior:** Can an existing roadmap-topic link still have its progress edited after the shared topic is archived?
-2. **Fixed review intervals:** What exact intervals apply after solving and after each completed review? What are the rules for early, overdue, and repeated completion?
-3. **Problem-topic associations:** Can associations change after users have practice state? Do associations need archival/audit behavior?
-4. **Account deletion:** Is Firebase account deletion and data-retention behavior in MVP scope?
+1. **Problem-topic associations:** Can associations change after users have practice state? Do associations need archival/audit behavior?
+2. **Account deletion operations:** Define the operational runbook, retention requirements, and failure recovery before production use.
 5. **Environment:** Which SQL Server version and local development setup will be used?
 6. **Seed reconciliation:** How should seed updates behave when an administrator has manually edited or soft-deleted a seeded problem?
 
@@ -222,3 +221,13 @@ Do not silently guess answers. Resolve them in this issue or the decision log be
 - [ ] Indexes have a query/use-case rationale.
 - [ ] Open questions are resolved or explicitly accepted as deferred.
 - [ ] No EF Core entities or migrations are included in this documentation-only change.
+
+## 8. Approved review, seed, and identifier rules
+
+- Review schedule is unique on `(UserId, ProblemId)` and is created only when that pair becomes `Solved`.
+- The interval sequence is 1, 3, 7, 14, 30, and 60 days, then 60 days repeatedly.
+- Early review is allowed. `NextReviewAt` is calculated from the actual completion timestamp.
+- `ReviewCount` increments at most once per review occurrence. The API/application layer must implement a concurrency-safe idempotency strategy; the current-state schema alone is not sufficient to prove duplicate completion requests cannot advance twice.
+- `Problem.SeedKey` is a stable unique nullable key for seed-managed rows; admin-created problems may leave it null. Seed inserts missing rows only, does not overwrite admin-managed fields, and does not clear `DeletedAt`.
+- SQL Server `BIGINT` identifiers are represented as decimal strings in public JSON contracts and parsed to C# `long`.
+- Self-service account deletion is outside MVP scope. Operational deletion must separately track Firebase identity and application data.

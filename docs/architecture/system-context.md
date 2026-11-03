@@ -49,8 +49,15 @@ The diagram is a logical context view. The API verifies Firebase ID tokens using
 - Authentication is not authorization. A valid user may access only their own private roadmaps and associated user-specific data.
 - For a private roadmap, return `404 Not Found` both when it does not exist and when it is not owned by the caller, avoiding resource-existence disclosure.
 - Admin privileges must be provisioned and checked server-side. A client-supplied `isAdmin` flag or user ID is never sufficient.
-- Shared topics and the problem catalog are application-managed data. Problems are managed through the approved seed/admin process, not by ordinary learners.
+- Shared topics and the problem catalog are application-managed data. Archiving a shared topic preserves existing roadmap-topic links and progress, but prevents creating new links to that topic. Problems are managed through the approved seed/admin process, not by ordinary learners.
 - SQL Server credentials and Firebase Admin credentials must never be shipped to the browser or committed to the repository.
+
+
+- Review intervals are fixed at 1, 3, 7, 14, 30, and 60 days, then every 60 days thereafter. Early completion is allowed; the next date is calculated from the actual completion timestamp. Overdue reviews are not penalized.
+- A review completion must be concurrency-safe and idempotent for the current review occurrence.
+- Seed operations insert missing catalog data only. They must not overwrite admin-managed fields or restore soft-deleted problems.
+- Self-service account deletion is outside MVP scope. Any operational deletion request must account separately for Firebase identity and application data.
+- SQL Server `BIGINT` identifiers are represented as decimal strings in public JSON contracts.
 
 ## 5. Main request flows
 
