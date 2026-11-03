@@ -47,6 +47,7 @@ The diagram is a logical context view. The API verifies Firebase ID tokens using
 - The backend must reject requests with missing, invalid, expired, or otherwise unacceptable tokens.
 - Email verification is required by the product decision. The backend must enforce this policy for protected application operations, not rely only on the frontend hiding UI.
 - Authentication is not authorization. A valid user may access only their own private roadmaps and associated user-specific data.
+- For a private roadmap, return `404 Not Found` both when it does not exist and when it is not owned by the caller, avoiding resource-existence disclosure.
 - Admin privileges must be provisioned and checked server-side. A client-supplied `isAdmin` flag or user ID is never sufficient.
 - Shared topics and the problem catalog are application-managed data. Problems are managed through the approved seed/admin process, not by ordinary learners.
 - SQL Server credentials and Firebase Admin credentials must never be shipped to the browser or committed to the repository.
@@ -66,12 +67,12 @@ The diagram is a logical context view. The API verifies Firebase ID tokens using
 ### Practice and review
 
 1. The learner opens a problem from the shared catalog.
-2. The learner records the problem as `Solved`.
-3. The API validates the request and verifies access to the relevant user-owned roadmap or practice record.
-4. The API persists the practice state and creates or updates the review schedule according to the fixed review policy.
+2. The learner marks the problem as `Solved`.
+3. The API validates the request and derives the user identity from the verified Firebase principal.
+4. The API idempotently stores the current state for the user-problem pair and creates the review schedule only when the problem becomes solved. Repeating the request must not create a duplicate record or reset an existing schedule.
 5. The learner can view due reviews for their own user-problem schedule.
 
-The exact review intervals and endpoint shapes belong in the approved business rules and API contracts. They should not be guessed in this context document.
+The fixed review intervals and overdue/repeated-completion behavior remain open decisions and must be agreed before implementing the scheduler.
 
 ## 6. Deployment boundary (MVP proposal)
 

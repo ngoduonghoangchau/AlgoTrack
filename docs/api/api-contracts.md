@@ -15,7 +15,7 @@
 
 - Use REST-style resource paths.
 - Use camelCase for JSON properties.
-- Use UUID strings for resource identifiers if consistent with the approved physical schema.
+- The physical schema currently uses SQL Server `BIGINT` identifiers. Finalize the JSON/path representation before implementation; do not silently treat these IDs as UUIDs. Because the frontend uses JavaScript, prefer decimal strings at the API boundary if numeric precision could be a concern.
 - Represent timestamps as ISO 8601 UTC strings.
 - Use UTF-8 JSON.
 - Never accept an owner user ID from the client as proof of ownership.
@@ -69,8 +69,8 @@ Do not expose sensitive implementation details in `detail`.
 | 201 | Resource created |
 | 204 | Successful operation with no response body |
 | 400 | Invalid request or validation failure |
-| 401 | Missing or invalid authentication, or unverified email under the chosen policy |
-| 403 | Authenticated caller lacks a required permission |
+| 401 | Missing or invalid authentication |
+| 403 | Authenticated caller lacks a required permission; proposed for a valid token with unverified email, pending final policy confirmation |
 | 404 | Resource does not exist or private resource is not owned by caller |
 | 409 | State conflict or duplicate resource |
 | 500 | Unexpected server failure |
@@ -101,7 +101,7 @@ Rules:
 - Handle concurrent first requests without creating duplicate profiles.
 - Do not return Firebase credentials or tokens in the profile response.
 
-Open question:
+Open decision:
 - Which profile fields can users edit, and which fields are synchronized from Firebase?
 
 ## 3. Roadmaps
@@ -186,7 +186,6 @@ Restores an archived roadmap.
 Response: `204 No Content`
 
 Open questions:
-- Should archived roadmaps be listed through `includeArchived=true` or a separate endpoint?
 - Should repeated archive/restore requests return success or `409 Conflict`?
 
 ## 4. Roadmap Topics
@@ -213,6 +212,8 @@ Allowed progress values:
 - `NotStarted`
 - `InProgress`
 - `Completed`
+
+These values are approved for the MVP.
 
 ### POST /api/v1/roadmaps/{roadmapId}/topics
 
@@ -437,6 +438,7 @@ Response: `200 OK`
 
 Rules:
 - `Solved` is the only supported practice status in the MVP.
+- The database stores only the current state per user-problem pair; it does not keep a full attempt history.
 - Repeated requests must be idempotent.
 - Create at most one practice record per user-problem pair.
 - Create the initial review schedule only when the problem becomes solved.
@@ -502,7 +504,7 @@ Every ownership check must be performed on the server.
 
 ## 11. Open Decisions Before Approval
 
-1. Archived roadmap listing and repeated archive/restore behavior.
+1. Repeated archive/restore behavior and archived-roadmap listing semantics.
 2. Archived shared-topic behavior and roadmap-topic restoration conflicts.
 3. Exact reorder semantics.
 4. Problem filters, sorting, difficulty enum, and pagination limits.
@@ -515,7 +517,7 @@ Every ownership check must be performed on the server.
 11. Topic/prerequisite admin operations.
 12. Fixed review intervals, early completion, overdue behavior, and repeated completion.
 13. Handling solved records when a problem is soft-deleted.
-14. Exact ID types and field constraints, verified against the approved physical schema.
+14. API representation of SQL Server `BIGINT` IDs and final field constraints against the physical schema.
 
 ## 12. Definition of Done
 

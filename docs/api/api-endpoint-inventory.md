@@ -108,7 +108,7 @@ Admin endpoints are a confirmed requirement, but exact DTOs, audit requirements,
 
 ## 7. Practice
 
-The MVP stores only the current practice state per user-problem pair. The approved status is `Solved`.
+The MVP stores only the current practice state per user-problem pair. It does not preserve a separate history of solve attempts. The approved status is `Solved`.
 
 | Method | Path | Purpose | Access |
 | --- | --- | --- | --- |
